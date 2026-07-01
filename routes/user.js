@@ -2,6 +2,7 @@ const express = require("express");
 const { ethers } = require("ethers");
 const authMiddleware = require("../middleware/auth");
 const User = require("../models/User");
+const Transaction = require("../models/Transaction");
 
 const router = express.Router();
 
@@ -36,6 +37,14 @@ router.put("/wallet", authMiddleware, async (req, res) => {
       { walletAddress },
       { new: true }
     ).select("-password");
+
+    await Transaction.create({
+      user: req.user._id,
+      type: "CONNECT_WALLET",
+      walletAddress,
+      status: "SUCCESS",
+      note: "Wallet connected to BinCoins dashboard",
+    });
 
     res.json({
       message: "Wallet connected successfully",
@@ -75,6 +84,50 @@ router.get("/balance", authMiddleware, async (req, res) => {
   } catch (error) {
     res.status(500).json({
       message: "Failed to load BINC balance",
+      error: error.message,
+    });
+  }
+});
+
+router.post("/transactions", authMiddleware, async (req, res) => {
+  try {
+    const { type, walletAddress, toAddress, amount, txHash, status, note } = req.body;
+
+    const transaction = await Transaction.create({
+      user: req.user._id,
+      type,
+      walletAddress: walletAddress || "",
+      toAddress: toAddress || "",
+      amount: amount || "0",
+      txHash: txHash || "",
+      status: status || "PENDING",
+      note: note || "",
+    });
+
+    res.status(201).json({
+      message: "Transaction saved",
+      transaction,
+    });
+  } catch (error) {
+    res.status(500).json({
+      message: "Failed to save transaction",
+      error: error.message,
+    });
+  }
+});
+
+router.get("/transactions", authMiddleware, async (req, res) => {
+  try {
+    const transactions = await Transaction.find({ user: req.user._id })
+      .sort({ createdAt: -1 })
+      .limit(30);
+
+    res.json({
+      transactions,
+    });
+  } catch (error) {
+    res.status(500).json({
+      message: "Failed to load transactions",
       error: error.message,
     });
   }
